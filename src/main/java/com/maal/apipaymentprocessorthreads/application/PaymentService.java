@@ -1,6 +1,7 @@
 package com.maal.apipaymentprocessorthreads.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.maal.apipaymentprocessorthreads.adapter.http.InternalHealthCheckClient;
 import com.maal.apipaymentprocessorthreads.adapter.persistence.PaymentLinkedBlockingQueue;
 import com.maal.apipaymentprocessorthreads.adapter.persistence.PaymentPersistenceMongo;
 import com.maal.apipaymentprocessorthreads.domain.document.PaymentDocument;
@@ -27,21 +28,27 @@ public class PaymentService {
     private final PaymentProcessorManualClient paymentProcessorDefaultClient;
     private final PaymentProcessorManualClient paymentProcessorFallbackClient;
     private final HealthCheckService healthCheckService;
+    private final InternalHealthCheckClient internalHealthCheckClient;
     private final ObjectMapper objectMapper;
+    private final boolean isLeader;
 
     public PaymentService(PaymentPersistenceMongo paymentPersistence,
                           PaymentLinkedBlockingQueue paymentsQueue,
                           @Qualifier(value = "paymentProcessorDefaultHttpClient") PaymentProcessorManualClient paymentProcessorDefaultClient,
                           @Qualifier(value = "paymentProcessorFallbackHttpClient") PaymentProcessorManualClient paymentProcessorFallbackClient,
                           HealthCheckService healthCheckService,
+                          InternalHealthCheckClient internalHealthCheckClient,
                           ObjectMapper objectMapper,
-                          @Value("${app.payment-processor.maxVirtualThreads}") int maxVirtualThreads) {
+                          @Value("${app.payment-processor.maxVirtualThreads}") int maxVirtualThreads,
+                          @Value("${app.payment-processor.healthcheck.leader.enabled}") boolean isLeader) {
         this.paymentPersistence = paymentPersistence;
         this.paymentsQueue = paymentsQueue;
         this.paymentProcessorDefaultClient = paymentProcessorDefaultClient;
         this.paymentProcessorFallbackClient = paymentProcessorFallbackClient;
         this.healthCheckService = healthCheckService;
+        this.internalHealthCheckClient = internalHealthCheckClient;
         this.objectMapper = objectMapper;
+        this.isLeader = isLeader;
 
         for (int i = 0; i < maxVirtualThreads; i++) {
             logger.info("Starting virtual thread #%d".formatted(i));
@@ -80,7 +87,18 @@ public class PaymentService {
 
     private void processPayment(PaymentsProcess paymentsProcess) {
 
-        if (Boolean.TRUE.equals(healthCheckService.getDefaultHealthStatus())) {
+        boolean defaultClientActive;
+        boolean fallbackClientActive;
+
+        if (isLeader) {
+            defaultClientActive = healthCheckService.getDefaultClientActive();
+            fallbackClientActive = healthCheckService.getFallbackClientActive();
+        } else {
+            defaultClientActive = !internalHealthCheckClient.getDefaultHealthStatus().failing();
+            fallbackClientActive = !internalHealthCheckClient.getFallbackHealthStatus().failing();
+        }
+
+        if (defaultClientActive) {
             logger.info("Processing payment {}", paymentsProcess.Payment().getCorrelationId());
             boolean processed = paymentProcessorDefaultClient.processPayment(paymentsProcess.paymentInJson());
             if (Boolean.TRUE.equals(processed)) {
@@ -88,7 +106,7 @@ public class PaymentService {
                 savePayment(paymentsProcess, PaymentProcessorType.DEFAULT);
             }
         } else {
-            if (Boolean.TRUE.equals(healthCheckService.getFallbackHealthStatus())){
+            if (fallbackClientActive){
                 logger.info("Processing payment {} with fallback client", paymentsProcess.Payment().getCorrelationId());
                 boolean processed = paymentProcessorFallbackClient.processPayment(paymentsProcess.paymentInJson());
                 if (processed) {

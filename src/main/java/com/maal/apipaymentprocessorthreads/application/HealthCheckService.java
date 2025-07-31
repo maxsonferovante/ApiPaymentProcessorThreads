@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class HealthCheckService {
@@ -23,6 +24,10 @@ public class HealthCheckService {
     private final PaymentProcessorManualClient paymentProcessorFallbackClient;
     private final AtomicBoolean isDefaultClientActive;
     private final AtomicBoolean isFallbackClientActive;
+
+    // New fields to store full HealthStatus
+    private final AtomicReference<HealthStatus> defaultHealthStatusRef = new AtomicReference<>(new HealthStatus(true, 0));
+    private final AtomicReference<HealthStatus> fallbackHealthStatusRef = new AtomicReference<>(new HealthStatus(true, 0));
 
     public HealthCheckService( @Qualifier(value = "paymentProcessorDefaultHttpClient") PaymentProcessorManualClient paymentProcessorDefaultClient,
                                @Qualifier(value = "paymentProcessorFallbackHttpClient")PaymentProcessorManualClient paymentProcessorFallbackClient) {
@@ -55,6 +60,10 @@ public class HealthCheckService {
             isDefaultClientActive.set(!newDefaultStatus.failing());
             isFallbackClientActive.set(!newFallbackStatus.failing());
 
+            // Update the AtomicReferences
+            defaultHealthStatusRef.set(newDefaultStatus);
+            fallbackHealthStatusRef.set(newFallbackStatus);
+
             logger.info("Result of default client health check {} - {}", newDefaultStatus, isDefaultClientActive.get());
             logger.info("Result of fallback client health check {} - {}", newFallbackStatus, isFallbackClientActive.get());
 
@@ -64,15 +73,27 @@ public class HealthCheckService {
             // Se houve um erro na verificação, consideramos ambos os clientes como inativos para evitar problemas
             isDefaultClientActive.set(false);
             isFallbackClientActive.set(false);
+            // Also update the AtomicReferences to indicate failure
+            defaultHealthStatusRef.set(new HealthStatus(true, 0));
+            fallbackHealthStatusRef.set(new HealthStatus(true, 0));
 
         }
     }
 
-    public Boolean getDefaultHealthStatus() {
+    public Boolean getDefaultClientActive() {
         return isDefaultClientActive.get();
     }
 
-    public Boolean getFallbackHealthStatus() {
+    public Boolean getFallbackClientActive() {
         return isFallbackClientActive.get();
+    }
+
+    // New methods to get the full HealthStatus objects
+    public HealthStatus getDefaultHealthStatus() {
+        return defaultHealthStatusRef.get();
+    }
+
+    public HealthStatus getFallbackHealthStatus() {
+        return fallbackHealthStatusRef.get();
     }
 }
