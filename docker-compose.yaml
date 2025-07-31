@@ -1,0 +1,86 @@
+version: "3.9"
+
+services:
+  mongodb:
+    image: mongo:8.0
+    container_name: mongodb
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "27017:27017"
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.6"
+          memory: "120MB"
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "9999:80"
+    depends_on:
+      - api-payment-1
+      - api-payment-2
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: "50MB"
+
+  api-payment-1:
+    container_name: api-payment-1
+    build:
+      context: .
+    pull_policy: always
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017/payment
+      PAYMENT_PROCESSOR_DEFAULT_URL: http://payment-processor-default:8080
+      PAYMENT_PROCESSOR_FALLBACK_URL: http://payment-processor-fallback:8080
+      HEALTHCHECK_LEADER_ENABLED: "true"
+      PAYMENT_PROCESSOR_MAX_VIRTUAL_THREADS: 20
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - backend
+      - payment-processor
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: "90MB"
+
+  api-payment-2:
+    container_name: api-payment-2
+    build:
+      context: .
+    pull_policy: always
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017/payment
+      PAYMENT_PROCESSOR_DEFAULT_URL: http://payment-processor-default:8080
+      PAYMENT_PROCESSOR_FALLBACK_URL: http://payment-processor-fallback:8080
+      HEALTHCHECK_LEADER_ENABLED: "false"
+      PAYMENT_PROCESSOR_MAX_VIRTUAL_THREADS: 20
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - backend
+      - payment-processor
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: "90MB"
+
+networks:
+  backend:
+    driver: bridge
+  payment-processor:
+    external: true

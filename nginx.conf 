@@ -1,0 +1,40 @@
+worker_processes auto;
+events {
+    use epoll;
+    worker_connections 4096;
+    accept_mutex on;
+}
+http {
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+
+    upstream backend {
+        server api-payment-1:8089;
+        server api-payment-2:8089;
+
+        keepalive 500;
+        keepalive_requests 10000;
+        keepalive_timeout 60s;
+    }
+    server_tokens off;
+
+    server {
+        listen 80 default_server reuseport;
+
+        access_log off;
+        error_log /dev/null crit;
+
+        server_tokens off;
+
+        location / {
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_pass http://backend;
+            proxy_buffering off;
+        }
+        reset_timedout_connection on;
+
+        gzip off;
+    }
+}
