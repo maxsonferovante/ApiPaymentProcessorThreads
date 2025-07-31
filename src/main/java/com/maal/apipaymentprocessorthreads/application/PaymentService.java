@@ -14,8 +14,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
-import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -31,16 +29,13 @@ public class PaymentService {
     private final HealthCheckService healthCheckService;
     private final ObjectMapper objectMapper;
 
-
-    @Value("${app.payment-processor.maxVirtualThreads}")
-    private static int maxVirtualThreads;
-
     public PaymentService(PaymentPersistenceMongo paymentPersistence,
                           PaymentLinkedBlockingQueue paymentsQueue,
                           @Qualifier(value = "paymentProcessorDefaultHttpClient") PaymentProcessorManualClient paymentProcessorDefaultClient,
                           @Qualifier(value = "paymentProcessorFallbackHttpClient") PaymentProcessorManualClient paymentProcessorFallbackClient,
                           HealthCheckService healthCheckService,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,
+                          @Value("${app.payment-processor.maxVirtualThreads}") int maxVirtualThreads) {
         this.paymentPersistence = paymentPersistence;
         this.paymentsQueue = paymentsQueue;
         this.paymentProcessorDefaultClient = paymentProcessorDefaultClient;
@@ -49,6 +44,7 @@ public class PaymentService {
         this.objectMapper = objectMapper;
 
         for (int i = 0; i < maxVirtualThreads; i++) {
+            logger.info("Starting virtual thread #%d".formatted(i));
             Thread.startVirtualThread(this::runWorker);
         }
 
