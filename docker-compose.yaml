@@ -38,6 +38,8 @@ services:
     container_name: api-payment-1
     build:
       context: .
+      args:
+        HEALTHCHECK_LEADER_URL: http://api-payment-1:8089/internal/health
     pull_policy: always
     environment:
       MONGODB_URI: mongodb://mongodb:27017/rinha
@@ -62,6 +64,8 @@ services:
     container_name: api-payment-2
     build:
       context: .
+      args:
+        HEALTHCHECK_LEADER_URL: http://api-payment-1:8089/internal/health
     pull_policy: always
     environment:
       MONGODB_URI: mongodb://mongodb:27017/rinha
