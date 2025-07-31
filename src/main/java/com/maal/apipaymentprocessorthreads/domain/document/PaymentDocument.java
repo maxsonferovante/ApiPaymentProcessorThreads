@@ -1,6 +1,9 @@
 package com.maal.apipaymentprocessorthreads.domain.document;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.mapping.FieldType;
@@ -9,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Document("payments")
+@CompoundIndexes({ @CompoundIndex(name = "requestedAt_processorType_idx", def = "{'requestedAt': 1, 'processorType': 1}") })
 public class PaymentDocument {
 
     @Id
@@ -19,8 +23,10 @@ public class PaymentDocument {
     @Field(value = "amount", targetType = FieldType.DECIMAL128)
     private BigDecimal amount;
 
+    @Indexed
     private Instant requestedAt;
 
+    @Indexed
     private PaymentProcessorType processorType;
 
     public String getCorrelationId() {
