@@ -52,7 +52,6 @@ public class PaymentService {
         this.isLeader = isLeader;
 
         for (int i = 0; i < maxVirtualThreads; i++) {
-            logger.info("Starting virtual thread #%d".formatted(i));
             Thread.startVirtualThread(this::runWorker);
         }
 

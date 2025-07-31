@@ -45,6 +45,7 @@ services:
       PAYMENT_PROCESSOR_FALLBACK_URL: http://payment-processor-fallback:8080
       HEALTHCHECK_LEADER_ENABLED: "true"
       PAYMENT_PROCESSOR_MAX_VIRTUAL_THREADS: 20
+      HEALTHCHECK_LEADER_URL: http://api-payment-1:8089/internal/health
     depends_on:
       mongodb:
         condition: service_healthy
