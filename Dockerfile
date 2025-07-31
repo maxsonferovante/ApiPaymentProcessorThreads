@@ -14,7 +14,7 @@ RUN chmod +x ./gradlew && ./gradlew dependencies --no-daemon
 
 COPY src/ src/
 
-RUN ./gradlew nativeCompile --no-daemon --console=plain -Dorg.gradle.jvmargs="-Xmx3g" -Pspring.aot.jvmArgs="-Xmx1g" -Pspring.native.enabled=true -Pspring.native.gradle.build-args="-O3,--gc=G1,--enable-preview,--strict-image-heap,--enable-native-access=ALL-UNNAMED"
+RUN ./gradlew nativeCompile --no-daemon --console=plain -Dorg.gradle.jvmargs="-Xmx3g" -Pspring.aot.jvmArgs="-Xmx1g" -Pspring.native.enabled=true -Pspring.native.gradle.build-args="-O3,--gc=G1,--enable-preview,--strict-image-heap,--enable-native-access=ALL-UNNAMED" -Dapp.payment-processor.healthcheck.leader.url=${HEALTHCHECK_LEADER_URL}
 
 # Runtime
 FROM redhat/ubi9-minimal:latest AS runtime
