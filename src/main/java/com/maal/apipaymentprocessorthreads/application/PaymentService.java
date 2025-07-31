@@ -100,33 +100,37 @@ public class PaymentService {
         }
 
         if (defaultClientActive) {
-            logger.info("Processing payment {}", paymentsProcess.Payment().getCorrelationId());
+            logger.info("Attempting to process payment {} with default client", paymentsProcess.Payment().getCorrelationId());
             boolean processed = paymentProcessorDefaultClient.processPayment(paymentsProcess.paymentInJson());
+            logger.info("Default client processing result for {}: {}", paymentsProcess.Payment().getCorrelationId(), processed);
             if (Boolean.TRUE.equals(processed)) {
                 logger.info("Payment processed successfully for correlation ID: {}", paymentsProcess.Payment().getCorrelationId());
                 savePayment(paymentsProcess, PaymentProcessorType.DEFAULT);
             }
         } else {
             if (fallbackClientActive){
-                logger.info("Processing payment {} with fallback client", paymentsProcess.Payment().getCorrelationId());
+                logger.info("Attempting to process payment {} with fallback client", paymentsProcess.Payment().getCorrelationId());
                 boolean processed = paymentProcessorFallbackClient.processPayment(paymentsProcess.paymentInJson());
+                logger.info("Fallback client processing result for {}: {}", paymentsProcess.Payment().getCorrelationId(), processed);
                 if (processed) {
                     logger.info("Payment processed successfully with fallback client for correlation ID: {}", paymentsProcess.Payment().getCorrelationId());
                     savePayment(paymentsProcess, PaymentProcessorType.FALLBACK);
                 }
             } else {
-                logger.warn("Payment processing failed for correlation ID: {} with fallback client", paymentsProcess.Payment().getCorrelationId());
+                logger.warn("Payment processing failed for correlation ID: {} - no active clients", paymentsProcess.Payment().getCorrelationId());
                 paymentsQueue.addToQueue(paymentsProcess);
             }
         }
     }
 
     private void savePayment (PaymentsProcess paymentsProcess, PaymentProcessorType type){
+        logger.info("Saving payment for correlation ID: {} with type: {}", paymentsProcess.Payment().getCorrelationId(), type);
         PaymentDocument paymentDocument = new PaymentDocument();
         paymentDocument.setCorrelationId(String.valueOf(paymentsProcess.Payment().getCorrelationId()));
         paymentDocument.setAmount(paymentsProcess.Payment().getAmount());
         paymentDocument.setRequestedAt(paymentsProcess.Payment().getRequestedAt());
         paymentDocument.setProcessorType(type);
         paymentPersistence.save(paymentDocument);
+        logger.info("Payment saved successfully for correlation ID: {}", paymentsProcess.Payment().getCorrelationId());
     }
 }
