@@ -13,11 +13,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 @Component
-@ConditionalOnProperty(
-        name = "app.payment-processor.healthcheck.leader.enabled",
-        havingValue = "false",
-        matchIfMissing = true
-)
 public class InternalHealthCheckClient {
 
     private final HttpClient httpClient;
