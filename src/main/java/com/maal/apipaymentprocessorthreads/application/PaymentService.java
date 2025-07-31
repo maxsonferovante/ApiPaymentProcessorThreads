@@ -12,6 +12,7 @@ import com.maal.apipaymentprocessorthreads.domain.model.PaymentsProcess;
 import com.maal.apipaymentprocessorthreads.entrypoint.dto.PaymentRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -28,7 +29,7 @@ public class PaymentService {
     private final PaymentProcessorManualClient paymentProcessorDefaultClient;
     private final PaymentProcessorManualClient paymentProcessorFallbackClient;
     private final HealthCheckService healthCheckService;
-    private final InternalHealthCheckClient internalHealthCheckClient;
+    private final Optional<InternalHealthCheckClient> internalHealthCheckClient;
     private final ObjectMapper objectMapper;
     private final boolean isLeader;
 
@@ -37,7 +38,7 @@ public class PaymentService {
                           @Qualifier(value = "paymentProcessorDefaultHttpClient") PaymentProcessorManualClient paymentProcessorDefaultClient,
                           @Qualifier(value = "paymentProcessorFallbackHttpClient") PaymentProcessorManualClient paymentProcessorFallbackClient,
                           HealthCheckService healthCheckService,
-                          InternalHealthCheckClient internalHealthCheckClient,
+                          @Autowired(required = false) Optional<InternalHealthCheckClient> internalHealthCheckClient,
                           ObjectMapper objectMapper,
                           @Value("${app.payment-processor.maxVirtualThreads}") int maxVirtualThreads,
                           @Value("${app.payment-processor.healthcheck.leader.enabled}") boolean isLeader) {
@@ -94,8 +95,9 @@ public class PaymentService {
             defaultClientActive = healthCheckService.getDefaultClientActive();
             fallbackClientActive = healthCheckService.getFallbackClientActive();
         } else {
-            defaultClientActive = !internalHealthCheckClient.getDefaultHealthStatus().failing();
-            fallbackClientActive = !internalHealthCheckClient.getFallbackHealthStatus().failing();
+            InternalHealthCheckClient client = internalHealthCheckClient.orElseThrow(() -> new IllegalStateException("InternalHealthCheckClient not present for non-leader instance"));
+            defaultClientActive = !client.getDefaultHealthStatus().failing();
+            fallbackClientActive = !client.getFallbackHealthStatus().failing();
         }
 
         if (defaultClientActive) {
