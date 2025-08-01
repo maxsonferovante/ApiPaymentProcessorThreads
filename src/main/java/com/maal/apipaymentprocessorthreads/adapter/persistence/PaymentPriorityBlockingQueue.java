@@ -1,17 +1,15 @@
 package com.maal.apipaymentprocessorthreads.adapter.persistence;
 
 import com.maal.apipaymentprocessorthreads.domain.model.PaymentsProcess;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.PriorityBlockingQueue;
 
 @Component
-public class PaymentLinkedBlockingQueue {
+public class PaymentPriorityBlockingQueue {
 
-    private final LinkedBlockingQueue<PaymentsProcess> paymentsQueue = new LinkedBlockingQueue<>();
+    private final PriorityBlockingQueue<PaymentsProcess> paymentsQueue = new PriorityBlockingQueue<>();
 
     public Optional<PaymentsProcess> fetchPayment(){
         try {
@@ -20,11 +18,8 @@ public class PaymentLinkedBlockingQueue {
             throw new RuntimeException(e);
         }
     }
+
     public void addToQueue(PaymentsProcess paymentsProcess) {
-        try {
-            paymentsQueue.put(paymentsProcess);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+        paymentsQueue.put(paymentsProcess);
     }
 }

@@ -2,7 +2,7 @@ package com.maal.apipaymentprocessorthreads.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.maal.apipaymentprocessorthreads.adapter.http.InternalHealthCheckClient;
-import com.maal.apipaymentprocessorthreads.adapter.persistence.PaymentLinkedBlockingQueue;
+import com.maal.apipaymentprocessorthreads.adapter.persistence.PaymentPriorityBlockingQueue;
 import com.maal.apipaymentprocessorthreads.adapter.persistence.PaymentPersistenceMongo;
 import com.maal.apipaymentprocessorthreads.domain.document.PaymentDocument;
 import com.maal.apipaymentprocessorthreads.domain.document.PaymentProcessorType;
@@ -25,7 +25,7 @@ public class PaymentService {
 
     private static final Logger logger = LoggerFactory.getLogger(PaymentService.class);
     private final PaymentPersistenceMongo paymentPersistence;
-    private final PaymentLinkedBlockingQueue paymentsQueue;
+    private final PaymentPriorityBlockingQueue paymentsQueue;
     private final PaymentProcessorManualClient paymentProcessorDefaultClient;
     private final PaymentProcessorManualClient paymentProcessorFallbackClient;
     private final HealthCheckService healthCheckService;
@@ -34,7 +34,7 @@ public class PaymentService {
     private final boolean isLeader;
 
     public PaymentService(PaymentPersistenceMongo paymentPersistence,
-                          PaymentLinkedBlockingQueue paymentsQueue,
+                          PaymentPriorityBlockingQueue paymentsQueue,
                           @Qualifier(value = "paymentProcessorDefaultHttpClient") PaymentProcessorManualClient paymentProcessorDefaultClient,
                           @Qualifier(value = "paymentProcessorFallbackHttpClient") PaymentProcessorManualClient paymentProcessorFallbackClient,
                           HealthCheckService healthCheckService,
@@ -50,7 +50,7 @@ public class PaymentService {
         this.internalHealthCheckClient = internalHealthCheckClient;
         this.objectMapper = objectMapper;
         this.isLeader = isLeader;
-
+        logger.info("Payment service started. Max virtual threads: {}, Leader enabled: {}", maxVirtualThreads, isLeader);
         for (int i = 0; i < maxVirtualThreads; i++) {
             Thread.startVirtualThread(this::runWorker);
         }
@@ -68,19 +68,9 @@ public class PaymentService {
 
     private void runWorker() {
         while (true) {
-            try {
-                Optional<PaymentsProcess> paymentProcess = paymentsQueue.fetchPayment();
-                if (paymentProcess.isPresent()) {
-                    processPayment(paymentProcess.get());
-                }
-            }
-            catch (Exception e) {
-                logger.error("Error processing payment: {}", e.getMessage());
-                try {
-                    TimeUnit.MILLISECONDS.sleep(100);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                }
+            var paymentProcess = paymentsQueue.fetchPayment();
+            if (paymentProcess.isPresent()) {
+                processPayment(paymentProcess.get());
             }
         }
     }
@@ -89,6 +79,8 @@ public class PaymentService {
 
         boolean defaultClientActive;
         boolean fallbackClientActive;
+        boolean isProcessedDefault = false;
+        boolean isProcessedFallback = false;
 
         if (isLeader) {
             defaultClientActive = healthCheckService.getDefaultClientActive();
@@ -98,39 +90,40 @@ public class PaymentService {
             defaultClientActive = !client.getDefaultHealthStatus().failing();
             fallbackClientActive = !client.getFallbackHealthStatus().failing();
         }
-
         if (defaultClientActive) {
-            logger.info("Attempting to process payment {} with default client", paymentsProcess.Payment().getCorrelationId());
-            boolean processed = paymentProcessorDefaultClient.processPayment(paymentsProcess.paymentInJson());
-            logger.info("Default client processing result for {}: {}", paymentsProcess.Payment().getCorrelationId(), processed);
-            if (Boolean.TRUE.equals(processed)) {
-                logger.info("Payment processed successfully for correlation ID: {}", paymentsProcess.Payment().getCorrelationId());
+            logger.warn("Attempting to process payment {} with default client", paymentsProcess.payment().correlationId());
+            isProcessedDefault  = paymentProcessorDefaultClient.processPayment(paymentsProcess.paymentInJson());
+            if (isProcessedDefault) {
+                logger.info("Payment processed successfully for correlation ID: {}", paymentsProcess.payment().correlationId());
                 savePayment(paymentsProcess, PaymentProcessorType.DEFAULT);
             }
-        } else {
-            if (fallbackClientActive){
-                logger.info("Attempting to process payment {} with fallback client", paymentsProcess.Payment().getCorrelationId());
-                boolean processed = paymentProcessorFallbackClient.processPayment(paymentsProcess.paymentInJson());
-                logger.info("Fallback client processing result for {}: {}", paymentsProcess.Payment().getCorrelationId(), processed);
-                if (processed) {
-                    logger.info("Payment processed successfully with fallback client for correlation ID: {}", paymentsProcess.Payment().getCorrelationId());
+        }
+        if (!isProcessedDefault && fallbackClientActive){
+                logger.warn("Attempting to process payment {} with fallback client", paymentsProcess.payment().correlationId());
+                isProcessedFallback = paymentProcessorFallbackClient.processPayment(paymentsProcess.paymentInJson());
+                if (isProcessedFallback) {
+                    logger.info("Payment processed successfully with fallback client for correlation ID: {}", paymentsProcess.payment().correlationId());
                     savePayment(paymentsProcess, PaymentProcessorType.FALLBACK);
                 }
-            } else {
-                logger.warn("Payment processing failed for correlation ID: {} - no active clients", paymentsProcess.Payment().getCorrelationId());
-                paymentsQueue.addToQueue(paymentsProcess);
-            }
+        }
+        if (!isProcessedDefault && !isProcessedFallback) {
+            logger.warn("Payment processing failed for correlation ID: {}. Re-queuing with {} retries...",
+                    paymentsProcess.payment().correlationId(), paymentsProcess.retryCount() + 1);
+            paymentsQueue.addToQueue(new PaymentsProcess(
+                    paymentsProcess.paymentInJson(),
+                    paymentsProcess.payment(),
+                    paymentsProcess.retryCount() + 1
+            ));
         }
     }
 
     private void savePayment (PaymentsProcess paymentsProcess, PaymentProcessorType type){
-        logger.info("Saving payment for correlation ID: {} with type: {}", paymentsProcess.Payment().getCorrelationId(), type);
         PaymentDocument paymentDocument = new PaymentDocument();
-        paymentDocument.setCorrelationId(String.valueOf(paymentsProcess.Payment().getCorrelationId()));
-        paymentDocument.setAmount(paymentsProcess.Payment().getAmount());
-        paymentDocument.setRequestedAt(paymentsProcess.Payment().getRequestedAt());
+        paymentDocument.setCorrelationId(String.valueOf(paymentsProcess.payment().correlationId()));
+        paymentDocument.setAmount(paymentsProcess.payment().amount());
+        paymentDocument.setRequestedAt(paymentsProcess.payment().requestedAt());
         paymentDocument.setProcessorType(type);
         paymentPersistence.save(paymentDocument);
-        logger.info("Payment saved successfully for correlation ID: {}", paymentsProcess.Payment().getCorrelationId());
+        logger.info("Payment saved successfully for correlation ID: {}", paymentsProcess.payment().correlationId());
     }
 }

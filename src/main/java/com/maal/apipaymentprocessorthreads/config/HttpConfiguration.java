@@ -15,7 +15,7 @@ public class HttpConfiguration {
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .version(HttpClient.Version.HTTP_1_1)
                 .executor(Runnable::run)
-                .connectTimeout(java.time.Duration.ofMillis(60))
+                .connectTimeout(java.time.Duration.ofMillis(5000))
                 .build();
     }
 }

@@ -15,14 +15,16 @@ public class PaymentHttpClientConfiguration {
 
     @Bean(name = "paymentProcessorDefaultHttpClient")
     public PaymentProcessorManualClient defaultClient(@Value("${app.payment-processor.default.url}") String url,
-                                                      HttpClient httpClient) {
+                                                      HttpClient httpClient,
+                                                      ObjectMapper objectMapper) {
 
-        return new PaymentProcessorClient(url, httpClient, new ObjectMapper());
+        return new PaymentProcessorClient(url, httpClient, objectMapper);
     }
     @Bean("paymentProcessorFallbackHttpClient")
     public PaymentProcessorManualClient fallbackClient(@Value("${app.payment-processor.fallback.url}") String url,
-                                                       HttpClient httpClient) {
+                                                       HttpClient httpClient,
+                                                       ObjectMapper objectMapper) {
 
-        return new PaymentProcessorClient(url, httpClient, new ObjectMapper());
+        return new PaymentProcessorClient(url, httpClient, objectMapper);
     }
 }

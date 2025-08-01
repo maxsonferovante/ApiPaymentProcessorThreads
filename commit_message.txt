@@ -1,0 +1,12 @@
+feat: Add GraalVM native reflection configuration
+
+This commit introduces a new configuration class `NativeConfig` to explicitly register classes for reflection when building a native image with GraalVM. This is crucial for Spring Data MongoDB to correctly persist and retrieve data, as it heavily relies on reflection.
+
+The following classes are registered:
+- `PaymentDocument`: The main MongoDB document entity.
+- `PaymentProcessorType`: An enum used within `PaymentDocument`.
+- `PaymentRequest`: DTO for incoming payment requests.
+- `Payment`: Internal domain model for payments.
+- `PaymentsProcess`: Model for managing payment processing flow.
+
+This change addresses the issue where payments were not being saved to MongoDB when running the application as a native image inside a Docker container, due to missing reflection metadata.

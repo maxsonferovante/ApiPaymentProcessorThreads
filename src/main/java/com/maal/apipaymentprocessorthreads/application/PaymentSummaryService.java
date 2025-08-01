@@ -38,7 +38,16 @@ public class PaymentSummaryService {
 
     public PaymentSummaryGetResponse summary(Instant from, Instant to) {
         try {
-            logger.info("Searching for payment summary");
+            logger.info("Searching for payment summary from {} to {}", from, to);
+            // caso não tenha from e to, pega tudo, sem intervalo de datas, logo agregation não terá filtro de data
+            if (from == null && to == null) {
+                from = Instant.EPOCH; // Data inicial padrão
+                to = Instant.now(); // Data final padrão
+            } else if (from == null) {
+                from = Instant.EPOCH; // Data inicial padrão
+            } else if (to == null) {
+                to = Instant.now(); // Data final padrão
+            }
             Criteria dateCriteria = Criteria.where("requestedAt")
                     .gte(from)
                     .lte(to);
@@ -51,16 +60,13 @@ public class PaymentSummaryService {
             );
 
             var results = mongoTemplate.aggregate(aggregation, "payments", Document.class).getMappedResults();
-//             Searching for payment summary [Document{{_id=DEFAULT, totalAmount=0, totalRequests=9400}}, Document{{_id=FALLBACK, totalAmount=0, totalRequests=1739}}]
 
             BigDecimal defaultAmount = BigDecimal.ZERO;
             int defaultRequests = 0;
             BigDecimal fallbackAmount = BigDecimal.ZERO;
             int fallbackRequests = 0;
 
-            logger.info("Searching for payment summary {}", results);
             for (Document doc : results) {
-//                 Searching for payment summary [Document{{_id=DEFAULT, totalAmount=0, totalRequests=9400}}, Document{{_id=FALLBACK, totalAmount=0, totalRequests=1739}}]
                 String processorTypeString = doc.getString("_id");
 
                 Number amountNumber = doc.get("totalAmount", Number.class);
@@ -82,7 +88,7 @@ public class PaymentSummaryService {
                     new SummaryDetailsResponse(defaultRequests, defaultAmount),
                     new SummaryDetailsResponse(fallbackRequests, fallbackAmount)
             );
-            logger.info("Payment summary retrieved successfully from {} to {} -> {}", from, to, response.toString());
+            logger.info("Payment summary retrieved successfully from {} to {} -> {}", from, to, response);
             return response;
 
         } catch (Exception e) {
