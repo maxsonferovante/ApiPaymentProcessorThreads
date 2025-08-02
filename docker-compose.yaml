@@ -2,6 +2,8 @@ services:
   mongodb:
     image: mongo:7.0
     container_name: mongodb
+    restart:
+      always
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -14,8 +16,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.4"
-          memory: "120MB"
+          cpus: "3.0"
+          memory: "512MB"
   nginx:
     image: nginx:alpine
     ports:
@@ -31,7 +33,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
+          cpus: "2.0"
           memory: "60MB"
 
   api-payment-1:
@@ -44,7 +46,7 @@ services:
       PAYMENT_PROCESSOR_FALLBACK_URL: http://payment-processor-fallback:8080
       HEALTHCHECK_LEADER_ENABLED: "true"
       PAYMENT_PROCESSOR_MAX_VIRTUAL_THREADS: 20
-      HEALTHCHECK_LEADER_URL: http://api-payment-1:8089/internal/health
+      HEALTHCHECK_LEADER_URL: http://api-payment-1:8089/health
     depends_on:
       mongodb:
         condition: service_healthy
@@ -55,7 +57,7 @@ services:
       resources:
         limits:
           cpus: "0.4"
-          memory: "85MB"
+          memory: "75MB"
 
   api-payment-2:
     image: docker.io/maxsonferovante/api-payment-processor-threads
@@ -67,7 +69,7 @@ services:
       PAYMENT_PROCESSOR_FALLBACK_URL: http://payment-processor-fallback:8080
       HEALTHCHECK_LEADER_ENABLED: "false"
       PAYMENT_PROCESSOR_MAX_VIRTUAL_THREADS: 20
-      HEALTHCHECK_LEADER_URL: http://api-payment-1:8089/internal/health
+      HEALTHCHECK_LEADER_URL: http://api-payment-1:8089/health
     depends_on:
       mongodb:
         condition: service_healthy
@@ -77,8 +79,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.4"
-          memory: "85MB"
+          cpus: "0.3"
+          memory: "75MB"
 
 networks:
   backend:
