@@ -12,12 +12,10 @@ import com.maal.apipaymentprocessorthreads.domain.model.PaymentsProcess;
 import com.maal.apipaymentprocessorthreads.entrypoint.dto.PaymentRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import java.util.Optional;
-import java.util.concurrent.TimeUnit;
+
 
 
 @Service
@@ -84,7 +82,6 @@ public class PaymentService {
         if (defaultClientActive) {
             isProcessed = paymentProcessorDefaultClient.processPayment(paymentsProcess.paymentInJson());
             if (isProcessed) {
-                logger.info("Payment processed successfully for correlation ID: {}", paymentsProcess.payment().correlationId());
                 savePayment(paymentsProcess, PaymentProcessorType.DEFAULT);
             }
         }
@@ -92,7 +89,6 @@ public class PaymentService {
         if (!isProcessed && fallbackClientActive) {
             isProcessed = paymentProcessorFallbackClient.processPayment(paymentsProcess.paymentInJson());
             if (isProcessed) {
-                logger.info("Payment processed successfully with fallback client for correlation ID: {}", paymentsProcess.payment().correlationId());
                 savePayment(paymentsProcess, PaymentProcessorType.FALLBACK);
             }
         }
@@ -115,7 +111,7 @@ public class PaymentService {
         paymentDocument.setRequestedAt(paymentsProcess.payment().requestedAt());
         paymentDocument.setProcessorType(type);
         paymentPersistence.save(paymentDocument);
-        logger.info("Payment saved successfully for correlation ID: {}", paymentsProcess.payment().correlationId());
+        logger.info("Payment saved successfully for correlation ID {} with type {}", paymentsProcess.payment().correlationId(), type);
     }
 
     public boolean testPaymentProcessor(String processorType) throws JsonProcessingException {
@@ -133,9 +129,5 @@ public class PaymentService {
         }
         
         return success;
-    }
-
-    public com.fasterxml.jackson.databind.ObjectMapper getObjectMapper() {
-        return objectMapper;
     }
 }

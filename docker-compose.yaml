@@ -16,8 +16,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "3.0"
-          memory: "512MB"
+          cpus: "0.4"
+          memory: "130MB"
   nginx:
     image: nginx:alpine
     ports:
@@ -33,8 +33,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "2.0"
-          memory: "60MB"
+          cpus: "0.2"
+          memory: "50MB"
 
   api-payment-1:
     image: docker.io/maxsonferovante/api-payment-processor-threads
@@ -45,7 +45,7 @@ services:
       PAYMENT_PROCESSOR_DEFAULT_URL: http://payment-processor-default:8080
       PAYMENT_PROCESSOR_FALLBACK_URL: http://payment-processor-fallback:8080
       HEALTHCHECK_LEADER_ENABLED: "true"
-      PAYMENT_PROCESSOR_MAX_VIRTUAL_THREADS: 20
+      PAYMENT_PROCESSOR_MAX_VIRTUAL_THREADS: 30
       HEALTHCHECK_LEADER_URL: http://api-payment-1:8089/health
     depends_on:
       mongodb:
@@ -57,7 +57,7 @@ services:
       resources:
         limits:
           cpus: "0.4"
-          memory: "75MB"
+          memory: "80MB"
 
   api-payment-2:
     image: docker.io/maxsonferovante/api-payment-processor-threads
@@ -68,7 +68,7 @@ services:
       PAYMENT_PROCESSOR_DEFAULT_URL: http://payment-processor-default:8080
       PAYMENT_PROCESSOR_FALLBACK_URL: http://payment-processor-fallback:8080
       HEALTHCHECK_LEADER_ENABLED: "false"
-      PAYMENT_PROCESSOR_MAX_VIRTUAL_THREADS: 20
+      PAYMENT_PROCESSOR_MAX_VIRTUAL_THREADS: 30
       HEALTHCHECK_LEADER_URL: http://api-payment-1:8089/health
     depends_on:
       mongodb:
@@ -79,8 +79,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: "75MB"
+          cpus: "0.5"
+          memory: "90MB"
 
 networks:
   backend:

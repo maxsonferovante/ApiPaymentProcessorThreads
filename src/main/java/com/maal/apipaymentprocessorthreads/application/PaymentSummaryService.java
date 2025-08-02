@@ -82,22 +82,8 @@ public class PaymentSummaryService {
         for (Map result : results.getMappedResults()) {
             try {
                 String processorType = (String) result.get("processorType");
-                Object totalAmountObj = result.get("totalAmount");
-                Object totalRequestsObj = result.get("totalRequests");
-                
-                BigDecimal totalAmount;
-                if (totalAmountObj instanceof Number) {
-                    totalAmount = new BigDecimal(totalAmountObj.toString());
-                } else {
-                    totalAmount = BigDecimal.ZERO;
-                }
-                
-                int totalRequests;
-                if (totalRequestsObj instanceof Number) {
-                    totalRequests = ((Number) totalRequestsObj).intValue();
-                } else {
-                    totalRequests = 0;
-                }
+                BigDecimal totalAmount = new BigDecimal(result.get("totalAmount").toString());
+                int totalRequests = (Integer) result.get("totalRequests");
 
                 if ("DEFAULT".equals(processorType)) {
                     defaultAmount = totalAmount;
