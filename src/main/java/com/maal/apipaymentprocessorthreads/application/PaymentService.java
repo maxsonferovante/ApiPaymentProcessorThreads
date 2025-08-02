@@ -27,7 +27,7 @@ public class PaymentService {
     private final PaymentProcessorManualClient paymentProcessorDefaultClient;
     private final PaymentProcessorManualClient paymentProcessorFallbackClient;
     private final HealthCheckService healthCheckService;
-    
+    private final int maxRetries;
     private final ObjectMapper objectMapper;
 
     public PaymentService(PaymentPersistenceMongo paymentPersistence,
@@ -36,13 +36,15 @@ public class PaymentService {
                           @Qualifier(value = "paymentProcessorFallbackHttpClient") PaymentProcessorManualClient paymentProcessorFallbackClient,
                           HealthCheckService healthCheckService,
                           ObjectMapper objectMapper,
-                          @Value("${app.payment-processor.maxVirtualThreads}") int maxVirtualThreads) {
+                          @Value("${app.payment-processor.maxVirtualThreads}") int maxVirtualThreads,
+                          @Value("${app.payment-processor.max-retries}") int maxRetries) {
         this.paymentPersistence = paymentPersistence;
         this.paymentsQueue = paymentsQueue;
         this.paymentProcessorDefaultClient = paymentProcessorDefaultClient;
         this.paymentProcessorFallbackClient = paymentProcessorFallbackClient;
         this.healthCheckService = healthCheckService;
         this.objectMapper = objectMapper;
+        this.maxRetries = maxRetries;
         logger.info("Payment service started. Max virtual threads: {}", maxVirtualThreads);
         for (int i = 0; i < maxVirtualThreads; i++) {
             Thread.startVirtualThread(this::runWorker);
@@ -68,7 +70,7 @@ public class PaymentService {
     }
 
     private void processPayment(PaymentsProcess paymentsProcess) {
-        if (paymentsProcess.retryCount() > 3) {
+        if (paymentsProcess.retryCount() > maxRetries) {
             logger.warn("Payment processing failed for correlation ID: {}. Max retries reached.",
                     paymentsProcess.payment().correlationId());
             return;
