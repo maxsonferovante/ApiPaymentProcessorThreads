@@ -1,29 +1,30 @@
 package com.maal.apipaymentprocessorthreads.application;
 
-
 import com.maal.apipaymentprocessorthreads.adapter.persistence.PaymentPersistenceMongo;
 import com.maal.apipaymentprocessorthreads.domain.document.PaymentProcessorType;
 import com.maal.apipaymentprocessorthreads.entrypoint.dto.PaymentSummaryGetResponse;
 import com.maal.apipaymentprocessorthreads.entrypoint.dto.SummaryDetailsResponse;
-import org.bson.Document;
+import com.maal.apipaymentprocessorthreads.domain.document.PaymentDocument;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.stereotype.Service;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.aggregation.GroupOperation;
 import org.springframework.data.mongodb.core.aggregation.MatchOperation;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.stereotype.Service;
-import org.springframework.data.mongodb.core.aggregation.Aggregation;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import static org.springframework.data.mongodb.core.aggregation.Aggregation.group;
-import static org.springframework.data.mongodb.core.aggregation.Aggregation.match;
-import static org.springframework.data.mongodb.core.aggregation.Aggregation.newAggregation;
+import org.springframework.data.mongodb.core.aggregation.ProjectionOperation;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.format.DateTimeParseException;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.Map;
+
+import static org.springframework.data.mongodb.core.aggregation.Aggregation.group;
+import static org.springframework.data.mongodb.core.aggregation.Aggregation.match;
+import static org.springframework.data.mongodb.core.aggregation.Aggregation.newAggregation;
+import static org.springframework.data.mongodb.core.aggregation.Aggregation.project;
 
 @Service
 public class PaymentSummaryService {
@@ -38,58 +39,16 @@ public class PaymentSummaryService {
 
     public PaymentSummaryGetResponse summary(Instant from, Instant to) {
         try {
-            logger.info("Searching for payment summary from {} to {}", from, to);
-            // caso não tenha from e to, pega tudo, sem intervalo de datas, logo agregation não terá filtro de data
             if (from == null && to == null) {
-                from = Instant.EPOCH; // Data inicial padrão
-                to = Instant.now(); // Data final padrão
+                from = Instant.EPOCH;
+                to = Instant.now();
             } else if (from == null) {
-                from = Instant.EPOCH; // Data inicial padrão
+                from = Instant.EPOCH;
             } else if (to == null) {
-                to = Instant.now(); // Data final padrão
+                to = Instant.now();
             }
-            Criteria dateCriteria = Criteria.where("requestedAt")
-                    .gte(from)
-                    .lte(to);
-
-            Aggregation aggregation = newAggregation(
-                    match(dateCriteria),
-                    group("processorType")
-                            .sum("amount").as("totalAmount")
-                            .count().as("totalRequests")
-            );
-
-            var results = mongoTemplate.aggregate(aggregation, "payments", Document.class).getMappedResults();
-
-            BigDecimal defaultAmount = BigDecimal.ZERO;
-            int defaultRequests = 0;
-            BigDecimal fallbackAmount = BigDecimal.ZERO;
-            int fallbackRequests = 0;
-
-            for (Document doc : results) {
-                String processorTypeString = doc.getString("_id");
-
-                Number amountNumber = doc.get("totalAmount", Number.class);
-                BigDecimal amount = amountNumber != null
-                        ? new BigDecimal(amountNumber.toString())
-                        : BigDecimal.ZERO;
-
-                int count = doc.getInteger("totalRequests", 0);
-
-                if (PaymentProcessorType.DEFAULT.name().equals(processorTypeString)) {
-                    defaultAmount = amount;
-                    defaultRequests = count;
-                }  else if (PaymentProcessorType.FALLBACK.name().equals(processorTypeString)) { // Adicionado else if para Fallback
-                    fallbackAmount = amount;
-                    fallbackRequests = count;
-                }
-            }
-            var response = new PaymentSummaryGetResponse(
-                    new SummaryDetailsResponse(defaultRequests, defaultAmount),
-                    new SummaryDetailsResponse(fallbackRequests, fallbackAmount)
-            );
-            logger.info("Payment summary retrieved successfully from {} to {} -> {}", from, to, response);
-            return response;
+            
+            return summaryWithAggregation(from, to);
 
         } catch (Exception e) {
             logger.error("Error retrieving payment summary: {}", e.getMessage());
@@ -97,4 +56,68 @@ public class PaymentSummaryService {
         }
     }
 
+    private PaymentSummaryGetResponse summaryWithAggregation(Instant from, Instant to) {
+        Criteria dateCriteria = Criteria.where("requestedAt")
+                .gte(from)
+                .lte(to);
+
+        MatchOperation matchOperation = match(dateCriteria);
+        GroupOperation groupOperation = group("processorType")
+                .sum("amount").as("totalAmount")
+                .count().as("totalRequests");
+        ProjectionOperation projectionOperation = project()
+                .andExpression("_id").as("processorType")
+                .andExpression("totalAmount").as("totalAmount")
+                .andExpression("totalRequests").as("totalRequests");
+
+        Aggregation aggregation = newAggregation(matchOperation, groupOperation, projectionOperation);
+        
+        AggregationResults<Map> results = mongoTemplate.aggregate(aggregation, "payments", Map.class);
+        
+        BigDecimal defaultAmount = BigDecimal.ZERO;
+        int defaultRequests = 0;
+        BigDecimal fallbackAmount = BigDecimal.ZERO;
+        int fallbackRequests = 0;
+
+        for (Map result : results.getMappedResults()) {
+            try {
+                String processorType = (String) result.get("processorType");
+                Object totalAmountObj = result.get("totalAmount");
+                Object totalRequestsObj = result.get("totalRequests");
+                
+                BigDecimal totalAmount;
+                if (totalAmountObj instanceof Number) {
+                    totalAmount = new BigDecimal(totalAmountObj.toString());
+                } else {
+                    totalAmount = BigDecimal.ZERO;
+                }
+                
+                int totalRequests;
+                if (totalRequestsObj instanceof Number) {
+                    totalRequests = ((Number) totalRequestsObj).intValue();
+                } else {
+                    totalRequests = 0;
+                }
+
+                if ("DEFAULT".equals(processorType)) {
+                    defaultAmount = totalAmount;
+                    defaultRequests = totalRequests;
+                } else if ("FALLBACK".equals(processorType)) {
+                    fallbackAmount = totalAmount;
+                    fallbackRequests = totalRequests;
+                }
+            } catch (Exception e) {
+                logger.warn("Error processing aggregation result: {}", e.getMessage());
+            }
+        }
+
+        return new PaymentSummaryGetResponse(
+                new SummaryDetailsResponse(defaultRequests, defaultAmount),
+                new SummaryDetailsResponse(fallbackRequests, fallbackAmount)
+        );
+    }
+
+    public MongoTemplate getMongoTemplate() {
+        return mongoTemplate;
+    }
 }
