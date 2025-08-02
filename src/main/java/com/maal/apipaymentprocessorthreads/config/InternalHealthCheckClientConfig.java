@@ -12,15 +12,20 @@ import java.net.http.HttpClient;
 @Configuration
 @ConditionalOnProperty(
         name = "app.payment-processor.healthcheck.leader.enabled",
-        havingValue = "false",
+        havingValue = "true",
         matchIfMissing = true
 )
 public class InternalHealthCheckClientConfig {
 
     @Bean
+    public String leaderHealthCheckUrl(@Value("${app.payment-processor.healthcheck.leader.url}") String leaderHealthCheckUrl) {
+        return leaderHealthCheckUrl;
+    }
+
+    @Bean
     public InternalHealthCheckClient internalHealthCheckClient(HttpClient httpClient,
                                                                ObjectMapper objectMapper,
-                                                               @Value("${app.payment-processor.healthcheck.leader.url}") String leaderHealthCheckUrl) {
+                                                               String leaderHealthCheckUrl) {
         return new InternalHealthCheckClient(httpClient, objectMapper, leaderHealthCheckUrl);
     }
 }

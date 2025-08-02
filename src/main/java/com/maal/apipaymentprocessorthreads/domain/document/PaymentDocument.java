@@ -12,12 +12,12 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Document("payments")
-@CompoundIndexes({ @CompoundIndex(name = "requestedAt_processorType_idx", def = "{'requestedAt': 1, 'processorType': 1}") })
 public class PaymentDocument {
 
     @Id
     private String id;
 
+    @Indexed(unique = true)
     private String correlationId;
 
     @Field(value = "amount", targetType = FieldType.DECIMAL128)

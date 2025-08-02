@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.net.http.HttpClient;
+import java.time.Duration;
 
 @Configuration
 public class HttpConfiguration {
@@ -15,7 +16,7 @@ public class HttpConfiguration {
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .version(HttpClient.Version.HTTP_1_1)
                 .executor(Runnable::run)
-                .connectTimeout(java.time.Duration.ofMillis(5000))
+                .connectTimeout(Duration.ofMillis(10000)) // Increased from 5000 to 10000ms
                 .build();
     }
 }
