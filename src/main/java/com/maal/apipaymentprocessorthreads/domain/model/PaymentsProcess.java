@@ -6,7 +6,7 @@ public class PaymentsProcess implements Comparable<PaymentsProcess> {
 
     private final String paymentInJson;
     private final Payment payment;
-    private final int retryCount;
+    private int retryCount;
 
     public PaymentsProcess(String paymentInJson, Payment payment) {
         this(paymentInJson, payment, 0);
@@ -28,6 +28,10 @@ public class PaymentsProcess implements Comparable<PaymentsProcess> {
 
     public int retryCount() {
         return retryCount;
+    }
+
+    public void incrementRetryCount() {
+        this.retryCount++;
     }
 
     @Override

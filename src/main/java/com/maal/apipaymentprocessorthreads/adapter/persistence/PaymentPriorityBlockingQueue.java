@@ -22,4 +22,8 @@ public class PaymentPriorityBlockingQueue {
     public void addToQueue(PaymentsProcess paymentsProcess) {
         paymentsQueue.put(paymentsProcess);
     }
+
+    public void addToLastQueue(PaymentsProcess paymentsProcess) {
+        paymentsQueue.offer(paymentsProcess);
+    }
 }

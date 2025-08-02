@@ -70,12 +70,6 @@ public class PaymentService {
     }
 
     private void processPayment(PaymentsProcess paymentsProcess) {
-        if (paymentsProcess.retryCount() > maxRetries) {
-            logger.warn("Payment processing failed for correlation ID: {}. Max retries reached.",
-                    paymentsProcess.payment().correlationId());
-            return;
-        }
-
         boolean defaultClientActive = healthCheckService.getDefaultClientActive();
         boolean fallbackClientActive = healthCheckService.getFallbackClientActive();
 
@@ -98,11 +92,13 @@ public class PaymentService {
         if (!isProcessed) {
             logger.warn("Payment processing failed for correlation ID: {}. Re-queuing with {} retries...",
                     paymentsProcess.payment().correlationId(), paymentsProcess.retryCount() + 1);
-            paymentsQueue.addToQueue(new PaymentsProcess(
-                    paymentsProcess.paymentInJson(),
-                    paymentsProcess.payment(),
-                    paymentsProcess.retryCount() + 1
-            ));
+            if (paymentsProcess.retryCount() < maxRetries) {
+                paymentsProcess.incrementRetryCount();
+                paymentsQueue.addToLastQueue(paymentsProcess);
+            } else {
+                logger.warn("Payment processing failed for correlation ID: {}. Max retries reached.",
+                        paymentsProcess.payment().correlationId());
+            }
         }
     }
 

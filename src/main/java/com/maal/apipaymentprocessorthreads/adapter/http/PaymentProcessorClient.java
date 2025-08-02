@@ -49,14 +49,14 @@ public class PaymentProcessorClient implements PaymentProcessorManualClient {
             boolean success = response.statusCode() == 200;
             
             if (!success) {
-                logger.warn("Payment processing failed - Status: {}, Response: {}, URL: {}", 
-                    response.statusCode(), response.body(), url);
+                logger.warn("Payment processing failed - Status: {}, Response: {}", 
+                    response.statusCode(), response.body());
             }
             
             return success;
         }
         catch (Exception e) {
-            logger.warn("Payment processing failed for Payment Processor Client ({}): {}", baseUrl, e.getMessage());
+            logger.warn("Processor Client error: {}", e.getMessage());
             return false;
         }
     }
