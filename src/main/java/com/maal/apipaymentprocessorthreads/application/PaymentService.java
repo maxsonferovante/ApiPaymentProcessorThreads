@@ -26,7 +26,6 @@ public class PaymentService {
     private final PaymentPriorityBlockingQueue paymentsQueue;
     private final PaymentProcessorManualClient paymentProcessorDefaultClient;
     private final PaymentProcessorManualClient paymentProcessorFallbackClient;
-    private final HealthCheckService healthCheckService;
     private final int maxRetries;
     private final ObjectMapper objectMapper;
 
@@ -34,7 +33,6 @@ public class PaymentService {
                           PaymentPriorityBlockingQueue paymentsQueue,
                           @Qualifier(value = "paymentProcessorDefaultHttpClient") PaymentProcessorManualClient paymentProcessorDefaultClient,
                           @Qualifier(value = "paymentProcessorFallbackHttpClient") PaymentProcessorManualClient paymentProcessorFallbackClient,
-                          HealthCheckService healthCheckService,
                           ObjectMapper objectMapper,
                           @Value("${app.payment-processor.maxVirtualThreads}") int maxVirtualThreads,
                           @Value("${app.payment-processor.max-retries}") int maxRetries) {
@@ -42,7 +40,6 @@ public class PaymentService {
         this.paymentsQueue = paymentsQueue;
         this.paymentProcessorDefaultClient = paymentProcessorDefaultClient;
         this.paymentProcessorFallbackClient = paymentProcessorFallbackClient;
-        this.healthCheckService = healthCheckService;
         this.objectMapper = objectMapper;
         this.maxRetries = maxRetries;
         logger.info("Payment service started. Max virtual threads: {}", maxVirtualThreads);
@@ -70,22 +67,26 @@ public class PaymentService {
     }
 
     private void processPayment(PaymentsProcess paymentsProcess) {
-        boolean defaultClientActive = healthCheckService.getDefaultClientActive();
-        boolean fallbackClientActive = healthCheckService.getFallbackClientActive();
-
         boolean isProcessed = false;
-
-        if (defaultClientActive) {
-            isProcessed = paymentProcessorDefaultClient.processPayment(paymentsProcess.paymentInJson());
-            if (isProcessed) {
+        for (int i = 0; i < 15; i++) {
+            logger.info("Attempt {} to process payment for correlation ID: {}", i + 1, paymentsProcess.payment().correlationId());
+            if (paymentProcessorDefaultClient.processPayment(paymentsProcess.paymentInJson())) {
                 savePayment(paymentsProcess, PaymentProcessorType.DEFAULT);
+                isProcessed = true;
+                break;
             }
-        }
 
-        if (!isProcessed && fallbackClientActive) {
-            isProcessed = paymentProcessorFallbackClient.processPayment(paymentsProcess.paymentInJson());
-            if (isProcessed) {
+            if (paymentProcessorFallbackClient.processPayment(paymentsProcess.paymentInJson())) {
                 savePayment(paymentsProcess, PaymentProcessorType.FALLBACK);
+                isProcessed = true;
+                break;
+            }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                logger.warn("Thread interrupted while waiting to retry payment for correlation ID: {}",
+                        paymentsProcess.payment().correlationId());
+                Thread.currentThread().interrupt();
             }
         }
 
