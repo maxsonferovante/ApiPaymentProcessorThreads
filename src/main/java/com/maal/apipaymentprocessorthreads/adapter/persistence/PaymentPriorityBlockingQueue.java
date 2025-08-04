@@ -20,7 +20,7 @@ public class PaymentPriorityBlockingQueue {
     }
 
     public void addToQueue(PaymentsProcess paymentsProcess) {
-        paymentsQueue.put(paymentsProcess);
+        paymentsQueue.add(paymentsProcess);
     }
 
     public void addToLastQueue(PaymentsProcess paymentsProcess) {
