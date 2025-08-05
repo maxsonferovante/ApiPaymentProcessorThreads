@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 
 @Service
@@ -28,24 +30,25 @@ public class PaymentService {
     private final PaymentProcessorManualClient paymentProcessorFallbackClient;
     private final int maxRetries;
     private final ObjectMapper objectMapper;
-
+    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     public PaymentService(PaymentPersistenceMongo paymentPersistence,
                           PaymentPriorityBlockingQueue paymentsQueue,
                           @Qualifier(value = "paymentProcessorDefaultHttpClient") PaymentProcessorManualClient paymentProcessorDefaultClient,
                           @Qualifier(value = "paymentProcessorFallbackHttpClient") PaymentProcessorManualClient paymentProcessorFallbackClient,
                           ObjectMapper objectMapper,
                           @Value("${app.payment-processor.maxVirtualThreads}") int maxVirtualThreads,
-                          @Value("${app.payment-processor.max-retries}") int maxRetries) {
+                          @Value("${app.payment-processor.max-retries}") int maxRetries
+    ) {
         this.paymentPersistence = paymentPersistence;
         this.paymentsQueue = paymentsQueue;
         this.paymentProcessorDefaultClient = paymentProcessorDefaultClient;
         this.paymentProcessorFallbackClient = paymentProcessorFallbackClient;
         this.objectMapper = objectMapper;
         this.maxRetries = maxRetries;
-        logger.info("Payment service started. Max virtual threads: {}", maxVirtualThreads);
         for (int i = 0; i < maxVirtualThreads; i++) {
-            Thread.startVirtualThread(this::runWorker);
+            executor.submit(this::runWorker);
         }
+        logger.info("Payment service started. Max virtual threads: {}", maxVirtualThreads);
     }
 
     public void paymentRequest(PaymentRequest request) throws JsonProcessingException {
@@ -111,6 +114,7 @@ public class PaymentService {
         paymentDocument.setProcessorType(type);
         paymentPersistence.save(paymentDocument);
         logger.info("Payment saved successfully for correlation ID {} with type {}", paymentsProcess.payment().correlationId(), type);
+
     }
 
     public boolean testPaymentProcessor(String processorType) throws JsonProcessingException {
