@@ -8,9 +8,9 @@ import com.maal.apipaymentprocessorthreads.domain.document.PaymentDocument;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.stereotype.Service;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.aggregation.GroupOperation;
@@ -19,6 +19,7 @@ import org.springframework.data.mongodb.core.aggregation.ProjectionOperation;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.springframework.data.mongodb.core.aggregation.Aggregation.group;
@@ -32,9 +33,11 @@ public class PaymentSummaryService {
     private static final Logger logger = LoggerFactory.getLogger(PaymentSummaryService.class);
 
     private final MongoTemplate mongoTemplate;
+    private final PaymentPersistenceMongo paymentPersistence;
 
-    public PaymentSummaryService(MongoTemplate mongoTemplate) {
+    public PaymentSummaryService(MongoTemplate mongoTemplate, PaymentPersistenceMongo paymentPersistence) {
         this.mongoTemplate = mongoTemplate;
+        this.paymentPersistence = paymentPersistence;
     }
 
     public PaymentSummaryGetResponse summary(Instant from, Instant to) {
@@ -48,7 +51,7 @@ public class PaymentSummaryService {
                 to = Instant.now();
             }
             
-            return summaryWithAggregation(from, to);
+            return summaryWithOptimizedQueries(from, to);
 
         } catch (Exception e) {
             logger.error("Error retrieving payment summary: {}", e.getMessage());
@@ -56,7 +59,40 @@ public class PaymentSummaryService {
         }
     }
 
+    private PaymentSummaryGetResponse summaryWithOptimizedQueries(Instant from, Instant to) {
+        try {
+            List<PaymentDocument> defaultPayments = paymentPersistence.findByProcessorTypeAndRequestedAtBetween(
+                PaymentProcessorType.DEFAULT.name(), from, to);
+            
+            List<PaymentDocument> fallbackPayments = paymentPersistence.findByProcessorTypeAndRequestedAtBetween(
+                PaymentProcessorType.FALLBACK.name(), from, to);
+            
+            BigDecimal defaultAmount = defaultPayments.stream()
+                .map(PaymentDocument::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            BigDecimal fallbackAmount = fallbackPayments.stream()
+                .map(PaymentDocument::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            int defaultRequests = defaultPayments.size();
+            int fallbackRequests = fallbackPayments.size();
+            
+            logger.debug("Summary calculated using optimized queries - Default: {} requests, {} amount. Fallback: {} requests, {} amount", 
+                defaultRequests, defaultAmount, fallbackRequests, fallbackAmount);
+            
+            return new PaymentSummaryGetResponse(
+                    new SummaryDetailsResponse(defaultRequests, defaultAmount),
+                    new SummaryDetailsResponse(fallbackRequests, fallbackAmount)
+            );
+        } catch (Exception e) {
+            logger.warn("Optimized queries failed, falling back to aggregation: {}", e.getMessage());
+            return summaryWithAggregation(from, to);
+        }
+    }
+    
     private PaymentSummaryGetResponse summaryWithAggregation(Instant from, Instant to) {
+        // Método de fallback usando agregação (mais lento mas mais robusto)
         Criteria dateCriteria = Criteria.where("requestedAt")
                 .gte(from)
                 .lte(to);
@@ -101,9 +137,5 @@ public class PaymentSummaryService {
                 new SummaryDetailsResponse(defaultRequests, defaultAmount),
                 new SummaryDetailsResponse(fallbackRequests, fallbackAmount)
         );
-    }
-
-    public MongoTemplate getMongoTemplate() {
-        return mongoTemplate;
     }
 }
