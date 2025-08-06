@@ -23,12 +23,11 @@ public class PaymentProcessorClient implements PaymentProcessorManualClient {
     private static final Duration TIMEOUT = ofMillis(10000);
     private final String baseUrl;
     private final HttpClient httpClient;
-    private final ObjectMapper objectMapper;
 
-    public PaymentProcessorClient(String baseUrl, HttpClient httpClient, ObjectMapper objectMapper) {
+
+    public PaymentProcessorClient(String baseUrl, HttpClient httpClient) {
         this.baseUrl = baseUrl;
         this.httpClient = httpClient;
-        this.objectMapper = objectMapper;
     }
 
     @Override

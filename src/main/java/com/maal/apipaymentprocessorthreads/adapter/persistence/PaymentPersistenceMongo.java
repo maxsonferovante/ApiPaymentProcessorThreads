@@ -15,4 +15,5 @@ public interface PaymentPersistenceMongo extends MongoRepository<PaymentDocument
     @Query(value = "{'processorType': ?0, 'requestedAt': {$gte: ?1, $lte: ?2}}")
     List<PaymentDocument> findByProcessorTypeAndRequestedAtBetween(
         String processorType, Instant from, Instant to);
-}
+
+    }
